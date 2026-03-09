@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Накладные — OCR</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📒</text></svg>">
+<link rel="shortcut icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📒</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #161920;
+    --border: #252933;
+    --accent: #e8c547;
+    --accent2: #4a9eff;
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --success: #34d399;
+    --error: #f87171;
+    --warn: #fbbf24;
+    --radius: 10px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'JetBrains Mono', monospace; background: var(--bg); color: var(--text); min-height: 100vh; overflow: hidden; }
+
+  /* LOGIN */
+  #login-screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--bg); z-index: 100; }
+  .login-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 48px 40px; width: 400px; position: relative; overflow: hidden; }
+  .login-box::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+  .login-logo { font-family: 'Unbounded', sans-serif; font-size: 18px; font-weight: 700; color: var(--accent); margin-bottom: 6px; }
+  .login-sub { font-size: 11px; color: var(--muted); margin-bottom: 28px; }
+  .field-label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 7px; }
+  .field-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); outline: none; transition: border-color .2s; margin-bottom: 16px; }
+  .field-input:focus { border-color: var(--accent); }
+  .btn-primary { width: 100%; background: var(--accent); color: #0d0f14; border: none; border-radius: var(--radius); padding: 13px; font-family: 'Unbounded', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: .5px; cursor: pointer; transition: opacity .2s; }
+  .btn-primary:hover { opacity: .88; }
+  .login-error { font-size: 11px; color: var(--error); margin-top: 10px; text-align: center; min-height: 16px; }
+
+  /* APP */
+  #app { display: none; flex-direction: column; height: 100vh; }
+  .header { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 52px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+  .header-logo { font-family: 'Unbounded', sans-serif; font-size: 13px; font-weight: 700; color: var(--accent); }
+  .header-right { display: flex; align-items: center; gap: 14px; }
+  .badge { font-size: 10px; padding: 3px 10px; border-radius: 20px; background: rgba(52,211,153,.12); color: var(--success); border: 1px solid rgba(52,211,153,.2); }
+  .btn-logout { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); cursor: pointer; transition: all .2s; }
+  .btn-logout:hover { border-color: var(--error); color: var(--error); }
+  .cost-tag { font-size: 9px; padding: 2px 8px; border-radius: 20px; background: rgba(232,197,71,.1); color: var(--accent); border: 1px solid rgba(232,197,71,.2); }
+
+  /* TABS */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; padding: 0 24px; }
+  .tab { padding: 10px 20px; font-family: 'Unbounded', sans-serif; font-size: 10px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all .2s; letter-spacing: .5px; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-content { display: none; flex: 1; overflow: hidden; }
+  .tab-content.active { display: flex; }
+
+  /* INVOICES LAYOUT */
+  .inv-layout { display: flex; flex: 1; overflow: hidden; }
+  .inv-sidebar { width: 320px; border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; flex-shrink: 0; }
+  .inv-sidebar-head { padding: 12px 14px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+  .inv-filters { display: flex; gap: 4px; }
+  .inv-filter { flex: 1; padding: 6px 0; font-family: 'Unbounded', sans-serif; font-size: 9px; font-weight: 600; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; text-align: center; transition: all .15s; letter-spacing: .3px; }
+  .inv-filter:hover { color: var(--text); }
+  .inv-filter.active { background: rgba(232,197,71,.1); border-color: var(--accent); color: var(--accent); }
+  .inv-filter .count { font-family: 'JetBrains Mono', monospace; font-size: 8px; margin-left: 2px; opacity: .7; }
+  .inv-supplier-select { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); outline: none; cursor: pointer; }
+  .inv-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .inv-list::-webkit-scrollbar { width: 3px; }
+  .inv-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .inv-card { padding: 10px 12px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; margin-bottom: 4px; transition: all .15s; }
+  .inv-card:hover { background: rgba(255,255,255,.03); border-color: var(--border); }
+  .inv-card.active { background: rgba(232,197,71,.06); border-color: rgba(232,197,71,.25); }
+  .inv-card-name { font-size: 12px; color: var(--text); margin-bottom: 3px; font-weight: 500; }
+  .inv-card-meta { font-size: 10px; color: var(--muted); margin-bottom: 5px; }
+  .inv-card-badges { display: flex; gap: 5px; flex-wrap: wrap; }
+  .b { font-size: 9px; padding: 2px 7px; border-radius: 20px; white-space: nowrap; }
+  .b-new { background: rgba(74,158,255,.12); color: var(--accent2); }
+  .b-confirmed { background: rgba(52,211,153,.12); color: var(--success); }
+  .b-rejected { background: rgba(248,113,113,.12); color: var(--error); }
+  .b-paid { background: rgba(52,211,153,.1); color: var(--success); }
+  .b-not_paid { background: rgba(248,113,113,.1); color: var(--error); }
+  .b-paid_delivery { background: rgba(74,158,255,.1); color: var(--accent2); }
+  .b-paid_cash { background: rgba(251,191,36,.1); color: var(--warn); }
+  .b-edited { background: rgba(232,197,71,.1); color: var(--accent); }
+
+  /* DETAIL */
+  .inv-detail { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .inv-detail-split { display: flex; flex: 1; overflow: hidden; }
+  .inv-photo-pane { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; background: var(--bg); padding: 12px; cursor: grab; }
+  .inv-photo-pane img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; user-select: none; }
+  .inv-data-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .inv-data-scroll { flex: 1; overflow-y: auto; padding: 16px; }
+  .inv-data-scroll::-webkit-scrollbar { width: 4px; }
+  .inv-data-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .inv-info { margin-bottom: 14px; }
+  .inv-info-row { font-size: 11px; color: var(--muted); line-height: 1.8; }
+  .inv-info-row span { color: var(--text); }
+
+  /* ITEMS TABLE */
+  .inv-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .inv-table th { padding: 8px 10px; text-align: left; font-size: 9px; letter-spacing: .8px; text-transform: uppercase; color: rgba(255,255,255,0.6); border-bottom: 1px solid var(--border); background: rgba(255,255,255,.02); }
+  .btn-add-row { background: none; border: 1px dashed var(--border); border-radius: 6px; padding: 6px 14px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); cursor: pointer; margin-top: 8px; transition: all .2s; }
+  .btn-add-row:hover { border-color: var(--accent); color: var(--accent); }
+  .inv-table td { padding: 7px 10px; border-bottom: 1px solid rgba(37,41,51,.5); color: var(--text); }
+  .inv-table tr:hover td { background: rgba(255,255,255,.015); }
+  .inv-table .td-num { color: var(--accent2); font-weight: 500; }
+  .inv-table .td-price { color: var(--accent); }
+  .inv-table input {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 4px 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); width: 100%; outline: none;
+  }
+  .inv-table input:focus { border-color: var(--accent); }
+
+  .inv-total { display: flex; justify-content: flex-end; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--border); margin-top: 8px; }
+  .inv-total-label { font-size: 11px; color: var(--muted); }
+  .inv-total-value { font-family: 'Unbounded', sans-serif; font-size: 14px; font-weight: 700; color: var(--accent); }
+
+  /* ACTION BUTTONS */
+  .inv-actions { padding: 14px 0; margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .inv-actions-hint { width: 100%; font-size: 10px; color: var(--muted); margin-top: 4px; }
+  .btn { border: none; border-radius: 6px; padding: 8px 16px; font-family: 'Unbounded', sans-serif; font-size: 10px; font-weight: 600; cursor: pointer; transition: opacity .15s; letter-spacing: .3px; display: flex; align-items: center; gap: 5px; }
+  .btn:hover { opacity: .85; }
+  .btn-confirm { background: var(--success); color: #0d0f14; }
+  .btn-edit { background: var(--accent); color: #0d0f14; }
+  .btn-reject { background: var(--error); color: white; }
+  .btn-save { background: var(--accent2); color: white; }
+  .btn-csv { background: var(--accent); color: #0d0f14; }
+  .btn-outline { background: none; border: 1px solid var(--border); color: var(--text); padding: 7px 15px; }
+  .btn-outline:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--muted); text-align: center; gap: 10px; }
+  .empty-icon { font-size: 36px; opacity: .35; }
+  .empty-text { font-size: 11px; line-height: 1.7; }
+
+  /* RAW TEXT */
+  .raw-text { font-size: 11px; line-height: 1.8; color: var(--text); white-space: pre-wrap; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-top: 12px; }
+  .raw-label { font-size: 10px; color: var(--muted); letter-spacing: .5px; margin-bottom: 4px; margin-top: 14px; }
+
+  /* NOTIFICATION */
+  .notification { position: fixed; bottom: 22px; right: 22px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; font-size: 11px; color: var(--text); z-index: 200; animation: slideIn .3s ease; max-width: 280px; }
+  @keyframes slideIn { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  /* SUPPLIERS */
+  .suppliers-page { flex: 1; display: flex; flex-direction: column; padding: 24px; overflow: auto; max-width: 800px; margin: 0 auto; width: 100%; }
+  .supplier-form { display: flex; gap: 10px; margin-bottom: 24px; align-items: flex-end; }
+  .supplier-form .field { flex: 1; }
+  .supplier-form .field-label { margin-bottom: 5px; }
+  .supplier-form .field-input { margin-bottom: 0; }
+  .sidebar-title { font-family: 'Unbounded', sans-serif; font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 12px; }
+  .supplier-list { display: flex; flex-direction: column; gap: 8px; }
+  .supplier-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; transition: border-color .2s; }
+  .supplier-card:hover { border-color: var(--accent); }
+  .supplier-info { display: flex; flex-direction: column; gap: 3px; }
+  .supplier-name { font-size: 13px; color: var(--text); font-weight: 500; }
+  .supplier-phone { font-size: 11px; color: var(--muted); }
+  .supplier-link { font-size: 10px; color: var(--accent2); word-break: break-all; margin-top: 4px; }
+  .btn-copy { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 14px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--accent2); cursor: pointer; transition: all .2s; white-space: nowrap; }
+  .btn-copy:hover { border-color: var(--accent2); background: rgba(74,158,255,.08); }
+  .btn-copy.copied { border-color: var(--success); color: var(--success); }
+  .btn-run { background: var(--accent); border: none; border-radius: 6px; padding: 7px 16px; font-family: 'Unbounded', sans-serif; font-size: 10px; font-weight: 700; color: #0d0f14; cursor: pointer; letter-spacing: .5px; transition: opacity .2s; display: flex; align-items: center; gap: 5px; }
+  .btn-run:hover { opacity: .85; }
+
+  /* CONFIRMED TAB */
+  .confirmed-header { padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--surface); }
+  .confirmed-list { flex: 1; overflow-y: auto; padding: 16px; }
+  .confirmed-list::-webkit-scrollbar { width: 4px; }
+  .confirmed-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">iBOOKKEEPER</div>
+    <div class="field-label">Логин</div>
+    <input class="field-input" type="text" id="login-user" placeholder="admin" />
+    <div class="field-label">Пароль</div>
+    <input class="field-input" type="password" id="login-pass" placeholder="••••••••" />
+    <button class="btn-primary" onclick="doLogin()">ВОЙТИ</button>
+    <div class="login-error" id="login-err"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="header">
+    <div class="header-logo">iBOOKKEEPER</div>
+    <div class="header-right">
+      <span class="badge">Яндекс Vision</span>
+      <span class="cost-tag">~1 ₽ / накладная</span>
+      <button class="btn-logout" onclick="doLogout()">Выйти</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="invoices" onclick="switchTab('invoices')">Накладные</div>
+    <div class="tab" data-tab="suppliers" onclick="switchTab('suppliers')">Контрагенты</div>
+  </div>
+
+  <!-- TAB: INVOICES -->
+  <div class="tab-content active" id="tab-invoices">
+    <div class="inv-layout">
+      <div class="inv-sidebar">
+        <div class="inv-sidebar-head">
+          <div class="inv-filters">
+            <button class="inv-filter active" data-status="new" onclick="setFilter('new')">Новые <span class="count" id="cnt-new"></span></button>
+            <button class="inv-filter" data-status="confirmed" onclick="setFilter('confirmed')">Подтв. <span class="count" id="cnt-confirmed"></span></button>
+            <button class="inv-filter" data-status="rejected" onclick="setFilter('rejected')">Откл. <span class="count" id="cnt-rejected"></span></button>
+          </div>
+          <select class="inv-supplier-select" id="supplier-filter" onchange="renderInvList()">
+            <option value="">Все контрагенты</option>
+          </select>
+        </div>
+        <div class="inv-list" id="inv-list"></div>
+      </div>
+      <div class="inv-detail" id="inv-detail">
+        <div class="empty-state">
+          <div class="empty-icon">🗂️</div>
+          <div class="empty-text">Выберите накладную<br>из списка слева</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: SUPPLIERS -->
+  <div class="tab-content" id="tab-suppliers">
+    <div class="suppliers-page">
+      <div class="sidebar-title" style="margin-bottom:18px">Добавить контрагента</div>
+      <div class="supplier-form">
+        <div class="field">
+          <div class="field-label">Имя контрагента</div>
+          <input class="field-input" type="text" id="sup-name" placeholder="ООО Продукты" />
+        </div>
+        <div class="field">
+          <div class="field-label">Телефон</div>
+          <input class="field-input" type="text" id="sup-phone" placeholder="+7 900 123-45-67" />
+        </div>
+        <button class="btn-run" onclick="addSupplier()" style="height:38px;margin-bottom:0">+ Добавить</button>
+      </div>
+      <div class="sidebar-title" style="margin-bottom:12px">Список контрагентов</div>
+      <div class="supplier-list" id="supplier-list">
+        <div style="font-size:11px;color:var(--muted);text-align:center;padding:20px">Загрузка...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── AUTH ──
+const USERS = { admin: 'yDH@QyfJGUHz' };
+function doLogin() {
+  const u = document.getElementById('login-user').value.trim();
+  const p = document.getElementById('login-pass').value;
+  const err = document.getElementById('login-err');
+  if (!USERS[u] || USERS[u] !== p) { err.textContent = 'Неверный логин или пароль'; return; }
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  err.textContent = '';
+  loadInvoices();
+}
+function doLogout() {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('login-screen').style.display !== 'none') doLogin();
+
+  // Invoice hotkeys — only when invoice is open, not editing a field
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if (!selectedInvId) return;
+  const inv = allInvoices.find(i => i._id === selectedInvId);
+  if (!inv || inv.status !== 'new') return;
+
+  if (e.key === 'Enter' && !editMode) {
+    e.preventDefault();
+    updateInvoice(inv._id, 'confirmed');
+  } else if ((e.key === 'e' || e.key === 'E' || e.key === 'F2') && !editMode) {
+    e.preventDefault();
+    editMode = true;
+    renderDetail();
+  } else if ((e.key === 'Delete' || e.key === 'Backspace') && !editMode) {
+    e.preventDefault();
+    updateInvoice(inv._id, 'rejected');
+  }
+});
+
+// ── TABS ──
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  if (tab === 'suppliers') loadSuppliers();
+  if (tab === 'invoices') loadInvoices();
+}
+
+// ── INVOICES ──
+let allInvoices = [];
+let currentFilter = 'new';
+let selectedInvId = null;
+let editMode = false;
+
+const PS_LABELS = { paid: '✅ Оплачено', not_paid: '❌ Не оплачено', paid_cash: '🏧 С кассы', paid_delivery: '🚚 С доставкой' };
+const STATUS_LABELS = { new: 'Новая', confirmed: 'Подтверждена', rejected: 'Отклонена' };
+
+async function loadInvoices() {
+  try {
+    const res = await fetch('/api/invoices');
+    allInvoices = await res.json();
+    // migrate old statuses
+    allInvoices.forEach(inv => { if (inv.status === 'processed') inv.status = 'new'; });
+    updateCounts();
+    populateSupplierFilter();
+    renderInvList();
+  } catch (e) { console.error(e); }
+}
+
+function updateCounts() {
+  ['new','confirmed','rejected'].forEach(s => {
+    const el = document.getElementById('cnt-' + s);
+    const c = allInvoices.filter(i => i.status === s).length;
+    el.textContent = c > 0 ? c : '';
+  });
+}
+
+function populateSupplierFilter() {
+  const sel = document.getElementById('supplier-filter');
+  const current = sel.value;
+  const names = [...new Set(allInvoices.map(i => i.supplier_name).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">Все контрагенты</option>' + names.map(n => `<option value="${n}">${n}</option>`).join('');
+  sel.value = current;
+}
+
+function setFilter(status) {
+  currentFilter = status;
+  document.querySelectorAll('.inv-filter').forEach(f => f.classList.toggle('active', f.dataset.status === status));
+  selectedInvId = null;
+  renderInvList();
+  renderDetail();
+}
+
+function renderInvList() {
+  const supplier = document.getElementById('supplier-filter').value;
+  let filtered = allInvoices.filter(i => i.status === currentFilter);
+  if (supplier) filtered = filtered.filter(i => i.supplier_name === supplier);
+
+  const list = document.getElementById('inv-list');
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty-state" style="padding:30px"><div class="empty-text">Нет накладных</div></div>';
+    return;
+  }
+
+  const csvBtn = currentFilter === 'confirmed' && filtered.length ? `<div style="padding:0 0 8px;text-align:right"><button class="btn btn-csv" onclick="exportCsv()" style="font-size:9px;padding:5px 12px">↓ Выгрузить CSV</button></div>` : '';
+  list.innerHTML = csvBtn + filtered.map(inv => {
+    const date = inv.received_at ? new Date(inv.received_at).toLocaleString('ru', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' }) : '';
+    const ps = inv.payment_status;
+    return `
+    <div class="inv-card ${inv._id === selectedInvId ? 'active' : ''}" onclick="selectInvoice('${inv._id}')">
+      <div class="inv-card-name">${inv.supplier_name || 'Без имени'}</div>
+      <div class="inv-card-meta">${date}${inv.total_sum ? ' · ' + inv.total_sum.toLocaleString('ru') + ' ₽' : ''}</div>
+      <div class="inv-card-badges">
+        <span class="b b-${inv.status}">${STATUS_LABELS[inv.status] || inv.status}</span>
+        ${ps ? `<span class="b b-${ps}">${PS_LABELS[ps] || ps}</span>` : ''}
+        ${inv.items_edited ? '<span class="b b-edited">изменено</span>' : ''}
+        ${inv.session_incomplete ? `<span class="b" style="background:rgba(251,191,36,.12);color:var(--warn)">⚠️ ${inv.session_received || '?'} из ${inv.session_total || '?'}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selectInvoice(id) {
+  selectedInvId = id;
+  editMode = false;
+  renderInvList();
+  renderDetail();
+}
+
+function renderDetail() {
+  const detail = document.getElementById('inv-detail');
+  const inv = allInvoices.find(i => i._id === selectedInvId);
+  if (!inv) {
+    detail.innerHTML = '<div class="empty-state"><div class="empty-icon">🗂️</div><div class="empty-text">Выберите накладную<br>из списка слева</div></div>';
+    return;
+  }
+
+  const photo = inv.photos?.length ? `/uploads/${inv.photos[0]}` : '';
+  const date = inv.received_at ? new Date(inv.received_at).toLocaleString('ru') : '';
+  const items = inv.items || [];
+  const ps = inv.payment_status;
+
+  detail.innerHTML = `
+    <div class="inv-detail-split">
+      <div style="flex:0 0 45%;display:flex;flex-direction:column;border-right:1px solid var(--border);">
+        <div style="display:flex;gap:8px;padding:8px 12px;background:var(--surface);border-bottom:1px solid var(--border);">
+          <button onclick="rotateImg(-90)" style="padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;font-size:13px;">↺ Влево</button>
+          <button onclick="rotateImg(90)" style="padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;font-size:13px;">↻ Вправо</button>
+        </div>
+        <div class="inv-photo-pane" style="flex:1;">
+          ${photo ? `<img src="${photo}" alt="photo" />` : '<div class="empty-state"><div class="empty-icon">📷</div><div class="empty-text">Нет фото</div></div>'}
+        </div>
+      </div>
+      <div class="inv-data-pane">
+        <div class="inv-data-scroll">
+          <div class="inv-info">
+            <div class="inv-info-row">Контрагент: <span>${inv.supplier_name || '—'}</span></div>
+            <div class="inv-info-row">Дата: <span>${date}</span></div>
+            <div class="inv-info-row">Оплата: <span>${ps ? PS_LABELS[ps] || ps : '—'}</span>${inv.payment_amount ? ' · ' + inv.payment_amount + ' ₽' : ''}</div>
+            <div class="inv-info-row">Статус: <span class="b b-${inv.status}" style="font-size:10px">${STATUS_LABELS[inv.status] || inv.status}</span>${inv.items_edited ? ' <span class="b b-edited" style="font-size:10px">изменено</span>' : ''}</div>
+          </div>
+          ${renderItemsTable(items, inv._id)}
+          <div class="inv-total">
+            <span class="inv-total-label">ИТОГО</span>
+            <span class="inv-total-value" id="detail-total">${(inv.total_sum || 0).toLocaleString('ru')} ₽</span>
+          </div>
+          ${renderActions(inv)}
+          ${inv.ocr_raw ? `<div class="raw-label">ИСХОДНЫЙ ТЕКСТ (OCR)</div><div class="raw-text">${escHtml(inv.ocr_raw)}</div>` : ''}
+        </div>
+      </div>
+    </div>`;
+  setTimeout(initPhotoZoom, 0);
+}
+
+function initPhotoZoom() {
+  const container = document.querySelector('.inv-photo-pane');
+  const imgEl = container?.querySelector('img');
+  if (!container || !imgEl) return;
+
+  let scale = 1, posX = 0, posY = 0, rotation = 0;
+  let isDragging = false, startX, startY;
+
+  window._currentImgEl = imgEl;
+  window._currentRotation = () => rotation;
+  window._setRotation = (r) => { rotation = r; };
+  window._resetZoom = () => { scale = 1; posX = 0; posY = 0; };
+
+  imgEl.style.transformOrigin = '0 0';
+  imgEl.style.cursor = 'grab';
+  imgEl.ondragstart = () => false;
+
+  container.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = container.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const prevScale = scale;
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    scale = Math.min(Math.max(0.5, scale + delta), 5);
+    posX -= mouseX * (scale - prevScale);
+    posY -= mouseY * (scale - prevScale);
+    imgEl.style.transform = `translate(${posX}px, ${posY}px) scale(${scale}) rotate(${rotation}deg)`;
+  }, { passive: false });
+
+  container.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    startX = e.clientX - posX;
+    startY = e.clientY - posY;
+    imgEl.style.cursor = 'grabbing';
+  });
+
+  const onMove = (e) => {
+    if (!isDragging) return;
+    const rect = container.getBoundingClientRect();
+    const imgW = imgEl.naturalWidth * scale;
+    const imgH = imgEl.naturalHeight * scale;
+    const minX = Math.min(0, rect.width - imgW);
+    const minY = Math.min(0, rect.height - imgH);
+    posX = Math.min(0, Math.max(minX, e.clientX - startX));
+    posY = Math.min(0, Math.max(minY, e.clientY - startY));
+    imgEl.style.transform = `translate(${posX}px, ${posY}px) scale(${scale}) rotate(${rotation}deg)`;
+  };
+  const onUp = () => {
+    if (!isDragging) return;
+    isDragging = false;
+    imgEl.style.cursor = 'grab';
+  };
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+
+  container.addEventListener('dblclick', () => {
+    scale = 1; posX = 0; posY = 0; rotation = 0;
+    imgEl.style.transform = 'translate(0,0) scale(1) rotate(0deg)';
+  });
+}
+
+function rotateImg(deg) {
+  const imgEl = window._currentImgEl;
+  if (!imgEl) return;
+  const r = (window._currentRotation() + deg + 360) % 360;
+  window._setRotation(r);
+  window._resetZoom();
+  imgEl.style.transformOrigin = 'center center';
+  imgEl.style.transform = `translate(0px, 0px) scale(1) rotate(${r}deg)`;
+}
+
+function renderItemsTable(items, invId) {
+  if (!items.length && !editMode) return '<div class="empty-text" style="padding:20px;text-align:center">Нет распознанных товаров</div>';
+  return `<table class="inv-table" id="items-table">
+    <thead><tr><th>#</th><th>Наименование</th><th>Ед.</th><th>Кол-во</th><th>Цена</th><th>Сумма</th></tr></thead>
+    <tbody>${items.map((r, i) => `<tr>
+      <td class="td-num">${i + 1}</td>
+      <td>${editMode ? `<input data-f="name" data-i="${i}" value="${escAttr(r.name || '')}"/>` : escHtml(r.name || '—')}</td>
+      <td>${editMode ? `<input data-f="unit" data-i="${i}" value="${escAttr(r.unit || '')}" style="width:50px"/>` : `<span style="color:var(--muted)">${r.unit || '—'}</span>`}</td>
+      <td>${editMode ? `<input data-f="qty" data-i="${i}" type="number" value="${r.qty ?? ''}" style="width:60px" oninput="recalcRow(${i})"/>` : `<span class="td-num">${r.qty ?? '—'}</span>`}</td>
+      <td>${editMode ? `<input data-f="price" data-i="${i}" type="number" value="${r.price ?? ''}" style="width:70px" oninput="recalcRow(${i})"/>` : `<span class="td-price">${r.price != null ? r.price.toLocaleString('ru') + ' ₽' : '—'}</span>`}</td>
+      <td>${editMode ? `<input data-f="total" data-i="${i}" type="number" value="${r.total ?? ''}" style="width:70px"/>` : `<span class="td-price">${r.total != null ? r.total.toLocaleString('ru') + ' ₽' : '—'}</span>`}</td>
+    </tr>`).join('')}</tbody></table>
+  ${editMode ? '<button class="btn-add-row" onclick="addItemRow()">+ Добавить строку</button>' : ''}`;
+}
+
+function addItemRow() {
+  const tbody = document.querySelector('#items-table tbody');
+  if (!tbody) return;
+  const rows = tbody.querySelectorAll('tr');
+  const i = rows.length;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="td-num">${i + 1}</td>
+    <td><input data-f="name" data-i="${i}" value=""/></td>
+    <td><input data-f="unit" data-i="${i}" value="" style="width:50px"/></td>
+    <td><input data-f="qty" data-i="${i}" type="number" value="" style="width:60px" oninput="recalcRow(${i})"/></td>
+    <td><input data-f="price" data-i="${i}" type="number" value="" style="width:70px" oninput="recalcRow(${i})"/></td>
+    <td><input data-f="total" data-i="${i}" type="number" value="" style="width:70px"/></td>`;
+  tbody.appendChild(tr);
+  tr.querySelector('[data-f="name"]').focus();
+}
+
+function recalcRow(i) {
+  const qty = document.querySelector(`input[data-f="qty"][data-i="${i}"]`);
+  const price = document.querySelector(`input[data-f="price"][data-i="${i}"]`);
+  const total = document.querySelector(`input[data-f="total"][data-i="${i}"]`);
+  if (qty && price && total) {
+    const q = parseFloat(qty.value) || 0;
+    const p = parseFloat(price.value) || 0;
+    total.value = q * p || '';
+  }
+  recalcTotal();
+}
+
+function recalcTotal() {
+  const totals = document.querySelectorAll('input[data-f="total"]');
+  let sum = 0;
+  totals.forEach(t => { sum += parseFloat(t.value) || 0; });
+  const el = document.getElementById('detail-total');
+  if (el) el.textContent = sum.toLocaleString('ru') + ' ₽';
+}
+
+function renderActions(inv) {
+  if (inv.status === 'confirmed') return `<div class="inv-actions"><span style="font-size:10px;color:var(--success)">✓ Подтверждена</span></div>`;
+  if (inv.status === 'rejected') return `<div class="inv-actions"><span style="font-size:10px;color:var(--error)">✗ Отклонена</span><button class="btn btn-outline" onclick="updateInvoice('${inv._id}','new')">Вернуть</button></div>`;
+  // new
+  if (editMode) {
+    return `<div class="inv-actions">
+      <button class="btn btn-save" onclick="saveEdits('${inv._id}')">Сохранить правки</button>
+      <button class="btn btn-confirm" onclick="saveAndConfirm('${inv._id}')">Сохранить и подтвердить</button>
+      <button class="btn btn-outline" onclick="editMode=false;renderDetail()">Отмена</button>
+    </div>`;
+  }
+  return `<div class="inv-actions">
+    <button class="btn btn-confirm" onclick="updateInvoice('${inv._id}','confirmed')">✓ Подтвердить</button>
+    <button class="btn btn-edit" onclick="editMode=true;renderDetail()">✎ Исправить</button>
+    <button class="btn btn-reject" onclick="updateInvoice('${inv._id}','rejected')">✗ Отклонить</button>
+    <div class="inv-actions-hint">Enter — подтвердить · E — исправить · Del — отклонить</div>
+  </div>`;
+}
+
+function getEditedItems() {
+  const inputs = document.querySelectorAll('.inv-table input');
+  const map = {};
+  inputs.forEach(inp => {
+    const i = inp.dataset.i;
+    const f = inp.dataset.f;
+    if (!map[i]) map[i] = {};
+    map[i][f] = (f === 'qty' || f === 'price' || f === 'total') ? (inp.value ? Number(inp.value) : null) : inp.value;
+  });
+  return Object.values(map);
+}
+
+async function saveEdits(id) {
+  const items = getEditedItems();
+  try {
+    const res = await fetch('/api/invoices/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) });
+    const updated = await res.json();
+    const idx = allInvoices.findIndex(i => i._id === id);
+    if (idx >= 0) allInvoices[idx] = updated;
+    editMode = false;
+    renderDetail();
+    updateCounts();
+    notify('Правки сохранены', 'success');
+  } catch (e) { notify('Ошибка сохранения', 'error'); }
+}
+
+async function saveAndConfirm(id) {
+  const items = getEditedItems();
+  try {
+    await fetch('/api/invoices/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items, status: 'confirmed' }) });
+    editMode = false;
+    await loadInvoices();
+    selectedInvId = null;
+    renderDetail();
+    notify('Сохранено и подтверждено', 'success');
+  } catch (e) { notify('Ошибка', 'error'); }
+}
+
+async function updateInvoice(id, status) {
+  try {
+    await fetch('/api/invoices/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+    await loadInvoices();
+    if (status !== currentFilter) { selectedInvId = null; renderDetail(); }
+    notify(status === 'confirmed' ? '✓ Подтверждено' : status === 'rejected' ? '✗ Отклонено' : 'Обновлено', 'success');
+  } catch (e) { notify('Ошибка', 'error'); }
+}
+
+function exportCsv() {
+  window.open('/api/invoices/export/csv', '_blank');
+}
+
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s) { return String(s).replace(/"/g,'&quot;').replace(/&/g,'&amp;'); }
+
+// Auto-refresh
+setInterval(() => {
+  if (document.getElementById('tab-invoices').classList.contains('active')) loadInvoices();
+}, 30000);
+
+// ── SUPPLIERS ──
+async function loadSuppliers() {
+  try {
+    const res = await fetch('/api/suppliers');
+    const list = await res.json();
+    const container = document.getElementById('supplier-list');
+    if (!list.length) { container.innerHTML = '<div style="font-size:11px;color:var(--muted);text-align:center;padding:20px">Нет контрагентов</div>'; return; }
+    container.innerHTML = list.map(s => `
+      <div class="supplier-card">
+        <div class="supplier-info">
+          <div class="supplier-name">${s.name}</div>
+          ${s.phone ? `<div class="supplier-phone">${s.phone}</div>` : ''}
+          <div class="supplier-link">https://ibookkeeper.org/upload?token=${s.token}</div>
+        </div>
+        <div style="flex-shrink:0">
+          <button class="btn-copy" onclick="copyLink(this, 'https://ibookkeeper.org/upload?token=${s.token}')">Копировать ссылку</button>
+        </div>
+      </div>`).join('');
+  } catch (e) { notify('Ошибка загрузки контрагентов', 'error'); }
+}
+
+async function addSupplier() {
+  const name = document.getElementById('sup-name').value.trim();
+  const phone = document.getElementById('sup-phone').value.trim();
+  if (!name) { notify('Введите имя контрагента', 'error'); return; }
+  try {
+    await fetch('/api/suppliers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, phone }) });
+    document.getElementById('sup-name').value = '';
+    document.getElementById('sup-phone').value = '';
+    notify('Контрагент добавлен', 'success');
+    loadSuppliers();
+  } catch (e) { notify('Ошибка добавления', 'error'); }
+}
+
+function copyLink(btn, link) {
+  navigator.clipboard.writeText(link).then(() => {
+    btn.textContent = '✓ Скопировано';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Копировать ссылку'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+function notify(msg, type = 'info') {
+  const n = document.createElement('div');
+  n.className = 'notification';
+  n.style.borderColor = type === 'error' ? 'var(--error)' : type === 'success' ? 'var(--success)' : 'var(--border)';
+  n.textContent = msg;
+  document.body.appendChild(n);
+  setTimeout(() => n.remove(), 3000);
+}
+</script>
+</body>
+</html>
