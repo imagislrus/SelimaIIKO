@@ -1,101 +1,809 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Загрузка накладной</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; padding: 16px; }
-    .container { max-width: 480px; margin: 0 auto; }
-    h1 { font-size: 20px; margin-bottom: 16px; text-align: center; }
-    .upload-area {
-      border: 2px dashed #ccc; border-radius: 12px; padding: 40px 20px;
-      text-align: center; background: #fff; cursor: pointer; margin-bottom: 16px;
-      transition: border-color 0.2s;
-    }
-    .upload-area.active { border-color: #4CAF50; background: #f0fff0; }
-    .upload-area p { color: #666; font-size: 16px; }
-    .preview { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-    .preview img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; border: 1px solid #ddd; }
-    .btn {
-      width: 100%; padding: 14px; font-size: 18px; border: none; border-radius: 10px;
-      background: #4CAF50; color: #fff; cursor: pointer; font-weight: 600;
-    }
-    .btn:disabled { background: #ccc; cursor: not-allowed; }
-    .status { text-align: center; margin-top: 16px; font-size: 16px; }
-    .status.error { color: #e53935; }
-    .status.success { color: #4CAF50; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0a0a">
+<title>Отправить накладную</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📒</text></svg>">
+<link rel="shortcut icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📒</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;700;900&family=Noto+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --card: #141414;
+    --border: #222;
+    --accent: #c8f135;
+    --text: #f0f0f0;
+    --muted: #666;
+    --success: #34d399;
+    --error: #ff5f5f;
+    --radius: 20px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans', sans-serif;
+    overflow-x: hidden;
+  }
+
+  body {
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    display: flex;
+    flex-direction: column;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  /* HEADER */
+  .header {
+    padding: 20px 24px 0;
+    flex-shrink: 0;
+  }
+
+  .supplier-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 8px 16px;
+    margin-bottom: 28px;
+  }
+
+  .supplier-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .supplier-name {
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 0.3px;
+  }
+
+  .title {
+    font-family: 'Unbounded', sans-serif;
+    font-size: 28px;
+    font-weight: 900;
+    line-height: 1.15;
+    color: var(--text);
+    margin-bottom: 10px;
+    letter-spacing: -0.5px;
+  }
+
+  .title span { color: var(--accent); }
+
+  .subtitle {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 32px;
+  }
+
+  /* MAIN CONTENT */
+  .content {
+    flex: 1;
+    padding: 0 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-bottom: 24px;
+  }
+
+  /* CAMERA BUTTON */
+  .btn-camera {
+    width: 100%;
+    background: var(--accent);
+    border: none;
+    border-radius: var(--radius);
+    padding: 0;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    -webkit-appearance: none;
+    appearance: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 180px;
+    transition: transform .15s, opacity .15s;
+    -webkit-transform: translateZ(0);
+  }
+
+  .btn-camera:active { transform: scale(.97); opacity: .92; }
+
+  .btn-camera input[type=file] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    font-size: 0;
+  }
+
+  .camera-icon { font-size: 52px; margin-bottom: 12px; pointer-events: none; }
+  .camera-label { font-family: 'Unbounded', sans-serif; font-size: 16px; font-weight: 700; color: #0a0a0a; letter-spacing: -0.3px; pointer-events: none; }
+  .camera-hint { font-size: 12px; color: rgba(10,10,10,.55); margin-top: 6px; pointer-events: none; }
+
+  /* GALLERY BUTTON */
+  .btn-gallery {
+    width: 100%;
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    -webkit-appearance: none;
+    appearance: none;
+    position: relative;
+    overflow: hidden;
+    transition: transform .15s, border-color .15s;
+    -webkit-transform: translateZ(0);
+  }
+
+  .btn-gallery:active { transform: scale(.97); border-color: var(--accent); }
+
+  .btn-gallery input[type=file] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    font-size: 0;
+  }
+
+  .gallery-icon { font-size: 32px; flex-shrink: 0; pointer-events: none; }
+  .gallery-text { pointer-events: none; text-align: left; }
+  .gallery-label { font-size: 15px; font-weight: 500; color: var(--text); margin-bottom: 3px; }
+  .gallery-hint { font-size: 12px; color: var(--muted); }
+
+  /* PHOTO CARDS */
+  .cards-section {
+    display: none;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .cards-section.show { display: flex; }
+
+  .cards-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .cards-label {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .cards-count {
+    font-family: 'Unbounded', sans-serif;
+    font-size: 13px;
+    color: var(--accent);
+  }
+
+  .photo-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .photo-card-top {
+    display: flex;
+    gap: 14px;
+    padding: 12px;
+  }
+
+  .photo-card-img {
+    width: 90px;
+    height: 90px;
+    border-radius: 10px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--bg);
+  }
+
+  .photo-card-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .photo-card-name {
+    font-size: 13px;
+    color: var(--text);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .photo-card-status {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .photo-card-status.set { color: var(--success); }
+
+  .photo-card-remove {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+    align-self: flex-start;
+    flex-shrink: 0;
+  }
+  .photo-card-remove:active { color: var(--error); }
+
+  /* STATUS BUTTONS GRID */
+  .status-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 0 12px 10px;
+  }
+
+  .status-btn {
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: all .2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+    font-family: 'Noto Sans', sans-serif;
+    font-size: 12px;
+    color: var(--text);
+  }
+  .status-btn:active { transform: scale(.95); }
+  .status-btn.selected {
+    border-color: var(--success);
+    background: rgba(52,211,153,.1);
+    color: var(--success);
+  }
+  .status-btn-icon { font-size: 16px; }
+
+  /* AMOUNT ROW */
+  .amount-row {
+    display: none;
+    padding: 0 12px 12px;
+  }
+  .amount-row.show { display: block; }
+
+  .amount-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-family: 'Noto Sans', sans-serif;
+    font-size: 14px;
+    color: var(--text);
+    outline: none;
+    transition: border-color .2s;
+    -webkit-appearance: none;
+  }
+  .amount-input:focus { border-color: var(--accent); }
+  .amount-input::placeholder { color: var(--muted); }
+
+  /* SEND BUTTON */
+  .btn-send {
+    width: 100%;
+    background: var(--text);
+    border: none;
+    border-radius: var(--radius);
+    padding: 20px;
+    font-family: 'Unbounded', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--bg);
+    cursor: pointer;
+    letter-spacing: -0.3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: transform .15s, opacity .15s;
+    -webkit-transform: translateZ(0);
+    -webkit-appearance: none;
+  }
+
+  .btn-send:active { transform: scale(.97); }
+  .btn-send:disabled { opacity: .3; cursor: not-allowed; }
+
+  .photo-card.error { border-color: var(--error); }
+
+  /* PROGRESS */
+  .progress-screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 40px 24px;
+    text-align: center;
+    gap: 20px;
+  }
+  .progress-screen.show { display: flex; }
+
+  .progress-ring {
+    width: 80px; height: 80px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .progress-title { font-family: 'Unbounded', sans-serif; font-size: 18px; font-weight: 700; }
+  .progress-text { font-size: 13px; color: var(--muted); line-height: 1.6; }
+  .progress-file { font-size: 12px; color: var(--accent); background: rgba(200,241,53,.08); padding: 8px 16px; border-radius: 100px; }
+
+  /* SUCCESS */
+  .success-screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 40px 24px;
+    text-align: center;
+    gap: 16px;
+  }
+  .success-screen.show { display: flex; }
+
+  .success-icon {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    background: rgba(52,211,153,.12);
+    border: 2px solid rgba(52,211,153,.3);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px;
+    animation: popIn .4s cubic-bezier(.34,1.56,.64,1);
+  }
+
+  @keyframes popIn {
+    from { transform: scale(0); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  .success-title { font-family: 'Unbounded', sans-serif; font-size: 22px; font-weight: 700; color: var(--success); }
+  .success-text { font-size: 14px; color: var(--muted); line-height: 1.6; }
+
+  .btn-again {
+    margin-top: 8px;
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 100px;
+    padding: 14px 28px;
+    font-size: 14px;
+    color: var(--text);
+    cursor: pointer;
+    -webkit-appearance: none;
+    transition: border-color .15s;
+  }
+  .btn-again:active { border-color: var(--accent); }
+
+  /* FOOTER */
+  .footer {
+    padding: 20px 24px;
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+    flex-shrink: 0;
+  }
+  .footer-text { font-size: 11px; color: var(--muted); text-align: center; }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--error);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 100px;
+    font-size: 13px;
+    opacity: 0;
+    transition: all .3s;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 100;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
 </head>
 <body>
-  <div class="container">
-    <h1>Загрузка накладной</h1>
-    <div class="upload-area" id="dropArea">
-      <p>Нажмите или перетащите фото накладной</p>
-      <input type="file" id="fileInput" accept="image/*" multiple capture="environment" hidden>
+
+<!-- MAIN UPLOAD SCREEN -->
+<div id="main-screen">
+  <div class="header">
+    <div class="supplier-badge">
+      <div class="supplier-dot"></div>
+      <span class="supplier-name" id="supplier-name">Контрагент</span>
     </div>
-    <div class="preview" id="preview"></div>
-    <button class="btn" id="sendBtn" disabled>Отправить</button>
-    <div class="status" id="status"></div>
+    <div class="title">Отправить<br><span>накладную</span></div>
+    <div class="subtitle">Сфотографируйте накладную<br>и отправьте одним нажатием</div>
   </div>
 
-  <script>
-    const token = new URLSearchParams(location.search).get('token');
-    if (!token) { document.body.innerHTML = '<p style="text-align:center;margin-top:40px;color:red;">Нет токена доступа</p>'; }
+  <div class="content" id="main-content">
+    <!-- Camera button -->
+    <button class="btn-camera" onclick="void(0)">
+      <input type="file" accept="image/*" capture="environment" multiple onchange="handleFiles(event)" />
+      <div class="camera-icon">📷</div>
+      <div class="camera-label">Сфотографировать</div>
+      <div class="camera-hint">Откроет камеру телефона</div>
+    </button>
 
-    const dropArea = document.getElementById('dropArea');
-    const fileInput = document.getElementById('fileInput');
-    const preview = document.getElementById('preview');
-    const sendBtn = document.getElementById('sendBtn');
-    const status = document.getElementById('status');
-    let files = [];
+    <!-- Gallery button -->
+    <button class="btn-gallery" onclick="void(0)">
+      <input type="file" accept="image/*" multiple onchange="handleFiles(event)" />
+      <div class="gallery-icon">🖼️</div>
+      <div class="gallery-text">
+        <div class="gallery-label">Выбрать из галереи</div>
+        <div class="gallery-hint">Уже готовое фото</div>
+      </div>
+    </button>
 
-    dropArea.addEventListener('click', () => fileInput.click());
-    dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('active'); });
-    dropArea.addEventListener('dragleave', () => dropArea.classList.remove('active'));
-    dropArea.addEventListener('drop', e => {
-      e.preventDefault(); dropArea.classList.remove('active');
-      addFiles(e.dataTransfer.files);
-    });
-    fileInput.addEventListener('change', () => addFiles(fileInput.files));
+    <!-- Photo cards list -->
+    <div class="cards-section" id="cards-section">
+      <div class="cards-header">
+        <div class="cards-label">Накладные</div>
+        <div class="cards-count" id="cards-count"></div>
+      </div>
+      <div id="cards-list"></div>
 
-    function addFiles(newFiles) {
-      for (const f of newFiles) {
-        if (files.length >= 10) break;
-        files.push(f);
-        const img = document.createElement('img');
-        img.src = URL.createObjectURL(f);
-        preview.appendChild(img);
-      }
-      sendBtn.disabled = files.length === 0;
-    }
+      <button class="btn-send" onclick="sendFiles()">
+        <span>📤</span>
+        <span>Отправить</span>
+      </button>
+    </div>
+  </div>
 
-    sendBtn.addEventListener('click', async () => {
-      sendBtn.disabled = true;
-      status.className = 'status';
-      status.textContent = 'Отправка...';
+  <div class="footer">
+    <div class="footer-text">Данные передаются защищённо</div>
+  </div>
+</div>
 
-      const fd = new FormData();
-      files.forEach(f => fd.append('photos', f));
+<!-- PROGRESS SCREEN -->
+<div class="progress-screen" id="progress-screen">
+  <div class="progress-ring"></div>
+  <div class="progress-title">Отправляю...</div>
+  <div class="progress-file" id="progress-file">Подготовка</div>
+  <div class="progress-text">Не закрывайте страницу</div>
+</div>
 
-      try {
-        const res = await fetch(`/upload?token=${token}`, { method: 'POST', body: fd });
-        const data = await res.json();
-        if (data.success) {
-          status.className = 'status success';
-          status.textContent = 'Накладная отправлена! Спасибо.';
-          files = [];
-          preview.innerHTML = '';
-        } else {
-          throw new Error(data.error || 'Ошибка');
+<!-- SUCCESS SCREEN -->
+<div class="success-screen" id="success-screen">
+  <div class="success-icon">✓</div>
+  <div class="success-title">Отправлено!</div>
+  <div class="success-text" id="success-text">Накладные получены.<br>Спасибо!</div>
+  <button class="btn-again" onclick="resetAll()">Отправить ещё</button>
+</div>
+
+<!-- ERROR TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+const supplierName = params.get('supplier') || 'Контрагент';
+const token = params.get('token') || '';
+const SERVER_URL = '/api/upload?token=' + encodeURIComponent(token);
+
+document.getElementById('supplier-name').textContent = supplierName;
+
+const STATUSES = [
+  { key: 'paid',          icon: '✅', label: 'Оплачено' },
+  { key: 'not_paid',      icon: '❌', label: 'Не оплачено' },
+  { key: 'paid_cash',     icon: '🏧', label: 'С кассы' },
+  { key: 'paid_delivery', icon: '🚚', label: 'С доставкой' },
+];
+
+const SEND_LABELS = {
+  pending:  { icon: '🕐', text: 'Ожидает статус', cls: '' },
+  sending:  { icon: '⏳', text: 'Отправляется...', cls: '' },
+  sent:     { icon: '✅', text: 'Отправлено', cls: 'set' },
+  error:    { icon: '❌', text: 'Ошибка', cls: 'error' },
+};
+
+let items = [];
+let sessionId = null;
+let idCounter = 0;
+
+function compressImage(file, maxWidth, quality) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.round(height * maxWidth / width);
+          width = maxWidth;
         }
-      } catch (err) {
-        status.className = 'status error';
-        status.textContent = err.message;
-        sendBtn.disabled = false;
-      }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => {
+          const compressed = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' });
+          resolve(compressed);
+        }, 'image/jpeg', quality);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleFiles(e) {
+  const files = Array.from(e.target.files);
+  e.target.value = '';
+  for (const file of files) {
+    const compressed = await compressImage(file, 1200, 0.6);
+    items.unshift({
+      id: ++idCounter,
+      file: compressed,
+      url: URL.createObjectURL(compressed),
+      paymentStatus: null,
+      paymentAmount: '',
+      sendStatus: 'pending',
+      invoiceId: null,
+      amountTimer: null
     });
-  </script>
+    renderCards();
+  }
+}
+
+function removeItem(i) {
+  const item = items[i];
+  if (item.sendStatus === 'sending' || item.sendStatus === 'sent') {
+    showToast('Нельзя удалить отправленное фото');
+    return;
+  }
+  URL.revokeObjectURL(item.url);
+  items.splice(i, 1);
+  renderCards();
+}
+
+function selectStatus(idx, status) {
+  const item = items[idx];
+  if (item.sendStatus === 'sending' || item.sendStatus === 'sent') return;
+  item.paymentStatus = item.paymentStatus === status ? null : status;
+  if (!sessionId && item.paymentStatus) {
+    sessionId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  }
+  renderCards();
+  if (item.paymentStatus && item.sendStatus === 'pending') {
+    sendPhotoInBackground(item);
+  }
+}
+
+function setAmount(idx, val) {
+  const item = items[idx];
+  item.paymentAmount = val;
+  clearTimeout(item.amountTimer);
+  item.amountTimer = setTimeout(async () => {
+    if (!item.invoiceId || !item.paymentAmount) return;
+    try {
+      await fetch('/api/invoices/' + item.invoiceId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payment_amount: parseFloat(item.paymentAmount) })
+      });
+    } catch (e) { console.error('Amount update error:', e); }
+  }, 1000);
+}
+
+async function sendWithRetry(formData, attempts) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(SERVER_URL, { method: 'POST', body: formData });
+      if (res.ok) return await res.json();
+      throw new Error('Server error ' + res.status);
+    } catch (e) {
+      if (i === attempts - 1) throw e;
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+}
+
+async function sendPhotoInBackground(item) {
+  if (!sessionId) {
+    sessionId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  }
+  item.sendStatus = 'sending';
+  renderCards();
+
+  const formData = new FormData();
+  formData.append('files', item.file, item.file.name);
+  formData.append('payment_status', item.paymentStatus);
+  if (item.paymentAmount) formData.append('payment_amount', item.paymentAmount);
+  formData.append('session_id', sessionId);
+  formData.append('session_index', item.id);
+  formData.append('session_total', 0);
+
+  try {
+    const res = await sendWithRetry(formData, 3);
+    item.sendStatus = 'sent';
+    item.invoiceId = res.invoice_id;
+  } catch (e) {
+    item.sendStatus = 'error';
+    console.error('Send error:', e);
+  }
+  renderCards();
+}
+
+function renderCards() {
+  const section = document.getElementById('cards-section');
+  const list = document.getElementById('cards-list');
+  const count = document.getElementById('cards-count');
+
+  if (!items.length) {
+    section.classList.remove('show');
+    return;
+  }
+
+  section.classList.add('show');
+  const sentCount = items.filter(i => i.sendStatus === 'sent').length;
+  const sendingCount = items.filter(i => i.sendStatus === 'sending').length;
+  let countText = items.length + ' фото';
+  if (sentCount > 0 || sendingCount > 0) {
+    countText += ` · ✅ ${sentCount}`;
+    if (sendingCount > 0) countText += ` · ⏳ ${sendingCount}`;
+  }
+  count.textContent = countText;
+
+  list.innerHTML = items.map((item, i) => {
+    const statusLabel = STATUSES.find(s => s.key === item.paymentStatus);
+    const sendLabel = SEND_LABELS[item.sendStatus];
+    const isSentOrSending = item.sendStatus === 'sending' || item.sendStatus === 'sent';
+    return `
+    <div class="photo-card ${item.sendStatus === 'error' ? 'error' : ''}" style="margin-bottom:10px">
+      <div class="photo-card-top">
+        <img class="photo-card-img" src="${item.url}" />
+        <div class="photo-card-info">
+          <div class="photo-card-name">${item.file.name}</div>
+          <div class="photo-card-status ${statusLabel ? 'set' : ''}">
+            ${statusLabel ? statusLabel.icon + ' ' + statusLabel.label : 'Статус не выбран'}
+          </div>
+          <div class="photo-card-status" style="margin-top:2px;font-size:10px;color:${item.sendStatus === 'sent' ? 'var(--success)' : item.sendStatus === 'error' ? 'var(--error)' : 'var(--muted)'}">
+            ${sendLabel.icon} ${sendLabel.text}
+          </div>
+        </div>
+        ${!isSentOrSending ? `<button class="photo-card-remove" onclick="removeItem(${i})">×</button>` : ''}
+      </div>
+      <div class="status-row">
+        ${STATUSES.map(s => `
+          <button class="status-btn ${item.paymentStatus === s.key ? 'selected' : ''}" ${isSentOrSending ? 'disabled style="opacity:.5"' : ''} onclick="selectStatus(${i}, '${s.key}')">
+            <span class="status-btn-icon">${s.icon}</span> ${s.label}
+          </button>
+        `).join('')}
+      </div>
+      <div class="amount-row ${item.paymentStatus ? 'show' : ''}">
+        <input class="amount-input" type="number" inputmode="decimal" placeholder="Сумма (необязательно)"
+          value="${item.paymentAmount}"
+          oninput="setAmount(${i}, this.value)" />
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function sendFiles() {
+  if (!items.length) return;
+
+  // Validate all have payment status
+  const missing = items.reduce((arr, item, i) => { if (!item.paymentStatus) arr.push(i); return arr; }, []);
+  if (missing.length) {
+    document.querySelectorAll('.photo-card').forEach((card, i) => {
+      card.classList.toggle('error', missing.includes(i));
+    });
+    showToast('Выберите статус оплаты для каждой накладной');
+    return;
+  }
+
+  if (!sessionId) {
+    sessionId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  }
+
+  // Retry errors and send pending
+  const toSend = items.filter(i => i.sendStatus === 'error' || i.sendStatus === 'pending');
+  for (const item of toSend) {
+    await sendPhotoInBackground(item);
+  }
+
+  // Wait for any in-flight sends
+  while (items.some(i => i.sendStatus === 'sending')) {
+    await new Promise(r => setTimeout(r, 500));
+  }
+
+  const totalPhotos = items.length;
+  const allSent = items.every(i => i.sendStatus === 'sent');
+
+  if (!allSent) {
+    showToast('Не все фото отправлены. Попробуйте ещё раз.');
+    return;
+  }
+
+  // Update session_total on all sent invoices
+  for (const item of items) {
+    if (item.invoiceId) {
+      try {
+        await fetch('/api/invoices/' + item.invoiceId, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_total: totalPhotos })
+        });
+      } catch (e) { console.error('session_total update error:', e); }
+    }
+  }
+
+  // Commit session
+  try {
+    const res = await fetch('/api/upload/commit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, session_total: totalPhotos, token })
+    });
+    const data = await res.json();
+
+    document.getElementById('main-screen').style.display = 'none';
+    document.getElementById('success-screen').classList.add('show');
+    if (!data.ok) {
+      document.getElementById('success-text').textContent = '⚠️ Не все фото дошли. Попробуйте отправить ещё раз.';
+    } else {
+      document.getElementById('success-text').textContent = '✅ Все фото отправлены!\nСпасибо!';
+    }
+  } catch (err) {
+    showToast('Ошибка проверки сессии: ' + err.message);
+  }
+}
+
+function resetAll() {
+  items.forEach(it => URL.revokeObjectURL(it.url));
+  items = [];
+  sessionId = null;
+  idCounter = 0;
+  document.getElementById('success-screen').classList.remove('show');
+  document.getElementById('main-screen').style.display = '';
+  renderCards();
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
 </body>
 </html>
