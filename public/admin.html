@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админ — Накладные</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; }
+    .header { background: #1a73e8; color: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; }
+    .header h1 { font-size: 18px; font-weight: 600; }
+    .header nav { display: flex; gap: 12px; }
+    .header nav button {
+      background: rgba(255,255,255,0.15); border: none; color: #fff; padding: 6px 14px;
+      border-radius: 6px; cursor: pointer; font-size: 14px;
+    }
+    .header nav button.active { background: rgba(255,255,255,0.35); }
+    .content { display: flex; height: calc(100vh - 48px); }
+    .panel { flex: 1; overflow-y: auto; padding: 16px; }
+    .panel-left { border-right: 1px solid #ddd; background: #fff; max-width: 420px; }
+    .panel-right { background: #fafafa; }
+
+    .card {
+      padding: 12px; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 8px;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .card:hover { background: #e8f0fe; }
+    .card.active { background: #d2e3fc; border-color: #1a73e8; }
+    .card .supplier { font-weight: 600; font-size: 14px; }
+    .card .meta { font-size: 12px; color: #666; margin-top: 4px; }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;
+    }
+    .badge.processing { background: #fff3cd; color: #856404; }
+    .badge.recognized { background: #d4edda; color: #155724; }
+    .badge.verified { background: #cce5ff; color: #004085; }
+    .badge.error { background: #f8d7da; color: #721c24; }
+
+    .detail h2 { font-size: 18px; margin-bottom: 12px; }
+    .photos { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .photos img { width: 120px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid #ddd; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee; }
+    th { background: #f5f5f5; font-weight: 600; }
+    td input {
+      width: 100%; border: 1px solid transparent; background: transparent; padding: 4px;
+      font-size: 14px; border-radius: 4px;
+    }
+    td input:focus { border-color: #1a73e8; background: #fff; outline: none; }
+    .actions { margin-top: 12px; display: flex; gap: 8px; }
+    .actions button {
+      padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;
+    }
+    .btn-save { background: #1a73e8; color: #fff; }
+    .btn-verify { background: #4CAF50; color: #fff; }
+
+    /* Модальное окно для поставщиков */
+    .modal-overlay {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: #fff; border-radius: 12px; padding: 24px; width: 90%; max-width: 500px;
+      max-height: 80vh; overflow-y: auto;
+    }
+    .modal h2 { margin-bottom: 16px; }
+    .modal input {
+      width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;
+      font-size: 14px; margin-bottom: 8px;
+    }
+    .modal .btn-add {
+      padding: 10px 20px; background: #1a73e8; color: #fff; border: none;
+      border-radius: 6px; cursor: pointer; font-size: 14px; margin-bottom: 16px;
+    }
+    .supplier-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 0; border-bottom: 1px solid #eee;
+    }
+    .supplier-item .info { font-size: 14px; }
+    .supplier-item .token { font-size: 11px; color: #888; word-break: break-all; }
+    .supplier-item button { background: #e53935; color: #fff; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+    .close-btn { float: right; background: none; border: none; font-size: 20px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Накладные</h1>
+    <nav>
+      <button class="active" onclick="showSection('invoices')">Накладные</button>
+      <button onclick="showSection('products')">Товары</button>
+      <button onclick="openSuppliers()">Поставщики</button>
+    </nav>
+  </div>
+
+  <div class="content" id="invoicesSection">
+    <div class="panel panel-left" id="invoiceList"></div>
+    <div class="panel panel-right" id="invoiceDetail">
+      <div style="text-align:center;color:#999;margin-top:40px;">Выберите накладную</div>
+    </div>
+  </div>
+
+  <div class="content" id="productsSection" style="display:none;">
+    <div class="panel" style="max-width:800px;margin:0 auto;">
+      <h2 style="margin-bottom:16px;">Справочник номенклатуры</h2>
+      <table id="productsTable">
+        <thead><tr><th>Название</th><th>Ед.</th><th>Посл. цена</th><th>Синонимы</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Модалка поставщиков -->
+  <div class="modal-overlay" id="suppliersModal">
+    <div class="modal">
+      <button class="close-btn" onclick="closeSuppliers()">&times;</button>
+      <h2>Поставщики</h2>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <input id="newSupplierName" placeholder="Имя поставщика">
+        <input id="newSupplierPhone" placeholder="Телефон" style="width:150px;">
+        <button class="btn-add" onclick="addSupplier()">Добавить</button>
+      </div>
+      <div id="suppliersList"></div>
+    </div>
+  </div>
+
+  <!-- Модалка просмотра фото -->
+  <div class="modal-overlay" id="photoModal" onclick="this.classList.remove('show')">
+    <img id="photoFull" style="max-width:90%;max-height:90%;border-radius:8px;">
+  </div>
+
+  <script>
+    let currentInvoiceId = null;
+
+    // --- Навигация ---
+    function showSection(name) {
+      document.getElementById('invoicesSection').style.display = name === 'invoices' ? 'flex' : 'none';
+      document.getElementById('productsSection').style.display = name === 'products' ? 'flex' : 'none';
+      document.querySelectorAll('.header nav button').forEach((b, i) => {
+        b.classList.toggle('active', (i === 0 && name === 'invoices') || (i === 1 && name === 'products'));
+      });
+      if (name === 'products') loadProducts();
+    }
+
+    // --- Накладные ---
+    async function loadInvoices() {
+      const res = await fetch('/api/invoices');
+      const { invoices } = await res.json();
+      const list = document.getElementById('invoiceList');
+      list.innerHTML = invoices.map(inv => `
+        <div class="card ${inv._id === currentInvoiceId ? 'active' : ''}" onclick="loadInvoice('${inv._id}')">
+          <div class="supplier">${inv.supplier_id?.name || 'Неизвестный'}</div>
+          <div class="meta">
+            ${new Date(inv.received_at).toLocaleString('ru')} &middot;
+            ${inv.items?.length || 0} поз. &middot;
+            ${inv.total_sum?.toFixed(2) || '0.00'} руб.
+            <span class="badge ${inv.status}">${statusLabel(inv.status)}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function statusLabel(s) {
+      return { processing: 'Обработка', recognized: 'Распознана', verified: 'Проверена', error: 'Ошибка' }[s] || s;
+    }
+
+    async function loadInvoice(id) {
+      currentInvoiceId = id;
+      const inv = await (await fetch(`/api/invoices/${id}`)).json();
+      const detail = document.getElementById('invoiceDetail');
+
+      const photosHtml = (inv.photos || []).map(p =>
+        `<img src="/uploads/${p}" onclick="showPhoto('/uploads/${p}')">`
+      ).join('');
+
+      const rowsHtml = (inv.items || []).map((item, i) => `
+        <tr>
+          <td><input value="${esc(item.name)}" data-i="${i}" data-f="name"></td>
+          <td><input value="${item.quantity}" data-i="${i}" data-f="quantity" type="number" style="width:60px"></td>
+          <td><input value="${esc(item.unit)}" data-i="${i}" data-f="unit" style="width:50px"></td>
+          <td><input value="${item.price}" data-i="${i}" data-f="price" type="number" style="width:80px"></td>
+          <td><input value="${item.sum}" data-i="${i}" data-f="sum" type="number" style="width:90px"></td>
+        </tr>
+      `).join('');
+
+      detail.innerHTML = `
+        <div class="detail">
+          <h2>${inv.supplier_id?.name || 'Неизвестный'} — ${new Date(inv.received_at).toLocaleDateString('ru')}</h2>
+          <div class="photos">${photosHtml}</div>
+          <table>
+            <thead><tr><th>Товар</th><th>Кол-во</th><th>Ед.</th><th>Цена</th><th>Сумма</th></tr></thead>
+            <tbody>${rowsHtml}</tbody>
+            <tfoot><tr><td colspan="4" style="text-align:right;font-weight:600;">Итого:</td><td id="totalSum">${inv.total_sum?.toFixed(2) || '0.00'}</td></tr></tfoot>
+          </table>
+          <div class="actions">
+            <button class="btn-save" onclick="saveInvoice('${id}')">Сохранить</button>
+            <button class="btn-verify" onclick="verifyInvoice('${id}')">Подтвердить</button>
+          </div>
+        </div>
+      `;
+
+      // Пересчёт суммы при изменении
+      detail.querySelectorAll('input[type=number]').forEach(inp => {
+        inp.addEventListener('input', () => recalcTotal());
+      });
+
+      loadInvoices();
+    }
+
+    function recalcTotal() {
+      const detail = document.getElementById('invoiceDetail');
+      const rows = detail.querySelectorAll('tbody tr');
+      let total = 0;
+      rows.forEach(row => {
+        const qty = parseFloat(row.querySelector('[data-f="quantity"]')?.value) || 0;
+        const price = parseFloat(row.querySelector('[data-f="price"]')?.value) || 0;
+        const sum = qty * price;
+        const sumInput = row.querySelector('[data-f="sum"]');
+        if (sumInput) sumInput.value = sum.toFixed(2);
+        total += sum;
+      });
+      const el = document.getElementById('totalSum');
+      if (el) el.textContent = total.toFixed(2);
+    }
+
+    function getItemsFromTable() {
+      const detail = document.getElementById('invoiceDetail');
+      const rows = detail.querySelectorAll('tbody tr');
+      const items = [];
+      rows.forEach(row => {
+        items.push({
+          name: row.querySelector('[data-f="name"]').value,
+          quantity: parseFloat(row.querySelector('[data-f="quantity"]').value) || 0,
+          unit: row.querySelector('[data-f="unit"]').value,
+          price: parseFloat(row.querySelector('[data-f="price"]').value) || 0,
+          sum: parseFloat(row.querySelector('[data-f="sum"]').value) || 0
+        });
+      });
+      return items;
+    }
+
+    async function saveInvoice(id) {
+      const items = getItemsFromTable();
+      const total_sum = items.reduce((s, i) => s + i.sum, 0);
+      await fetch(`/api/invoices/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items, total_sum })
+      });
+      loadInvoice(id);
+    }
+
+    async function verifyInvoice(id) {
+      const items = getItemsFromTable();
+      const total_sum = items.reduce((s, i) => s + i.sum, 0);
+      await fetch(`/api/invoices/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items, total_sum, status: 'verified' })
+      });
+      loadInvoice(id);
+    }
+
+    function showPhoto(src) {
+      document.getElementById('photoFull').src = src;
+      document.getElementById('photoModal').classList.add('show');
+    }
+
+    function esc(s) { return (s || '').replace(/"/g, '&quot;'); }
+
+    // --- Товары ---
+    async function loadProducts() {
+      const products = await (await fetch('/api/invoices/products/list')).json();
+      const tbody = document.querySelector('#productsTable tbody');
+      tbody.innerHTML = products.map(p => `
+        <tr>
+          <td>${esc(p.name)}</td>
+          <td>${esc(p.unit)}</td>
+          <td>${p.last_price}</td>
+          <td>${(p.aliases || []).join(', ')}</td>
+          <td><button onclick="deleteProduct('${p._id}')" style="background:#e53935;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;">Удалить</button></td>
+        </tr>
+      `).join('');
+    }
+
+    async function deleteProduct(id) {
+      if (!confirm('Удалить товар?')) return;
+      await fetch(`/api/invoices/products/${id}`, { method: 'DELETE' });
+      loadProducts();
+    }
+
+    // --- Поставщики ---
+    function openSuppliers() { document.getElementById('suppliersModal').classList.add('show'); loadSuppliers(); }
+    function closeSuppliers() { document.getElementById('suppliersModal').classList.remove('show'); }
+
+    async function loadSuppliers() {
+      const suppliers = await (await fetch('/api/invoices/suppliers/list')).json();
+      const list = document.getElementById('suppliersList');
+      list.innerHTML = suppliers.map(s => `
+        <div class="supplier-item">
+          <div>
+            <div class="info">${esc(s.name)} ${s.phone ? '(' + esc(s.phone) + ')' : ''}</div>
+            <div class="token">Ссылка: ${location.origin}/upload?token=${s.token}</div>
+          </div>
+          <button onclick="deleteSupplier('${s._id}')">Удалить</button>
+        </div>
+      `).join('');
+    }
+
+    async function addSupplier() {
+      const name = document.getElementById('newSupplierName').value.trim();
+      const phone = document.getElementById('newSupplierPhone').value.trim();
+      if (!name) return alert('Введите имя');
+      await fetch('/api/invoices/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, phone })
+      });
+      document.getElementById('newSupplierName').value = '';
+      document.getElementById('newSupplierPhone').value = '';
+      loadSuppliers();
+    }
+
+    async function deleteSupplier(id) {
+      if (!confirm('Удалить поставщика?')) return;
+      await fetch(`/api/invoices/suppliers/${id}`, { method: 'DELETE' });
+      loadSuppliers();
+    }
+
+    // Загрузка при старте
+    loadInvoices();
+  </script>
+</body>
+</html>
