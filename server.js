@@ -73,7 +73,8 @@ app.post('/api/upload', upload.array('files'), async (req, res) => {
       allRawText += fullText + '\n';
       const cRes = await axios.post('https://api.anthropic.com/v1/messages', {
         model: 'claude-haiku-4-5-20251001', max_tokens: 1500,
-        messages: [{ role: 'user', content: 'Extract invoice items. Return ONLY JSON: {"items":[{"name":"","unit":"","qty":0,"price":0,"total":0}],"total_sum":0}\n\nTEXT: ' + fullText }]
+        system: 'Ты — точный парсер товарных накладных. Извлекай данные строго из таблицы товаров.\n\nПРАВИЛА:\n1. Каждая строка таблицы = один товар\n2. Колонки таблицы накладной: наименование, кол-во, ед.изм., цена, сумма\n3. Сумма строки = кол-во × цена (проверяй арифметику)\n4. Если сумма не совпадает с кол-во × цена — доверяй кол-во и цене, пересчитай сумму\n5. Итоговая сумма = сумма всех строк (не бери цифру "Итого" из текста — считай сам)\n6. Числа с пробелами — это тысячи: "1 830" = 1830, "22 857,50" = 22857.50\n7. Запятая в числах — десятичный разделитель: "2 687,5" = 2687.5\n8. Игнорируй строки без товара (пустые строки, заголовки, итоги, НДС)\n9. Единицы измерения: кг, шт, л, кор, уп, пач, лист и др.',
+        messages: [{ role: 'user', content: 'Верни ТОЛЬКО JSON без пояснений:\n{"items":[{"name":"...","unit":"...","qty":число,"price":число,"total":число}],"total_sum":число}\n\nТЕКСТ НАКЛАДНОЙ:\n' + fullText }]
       }, { headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' } });
       const raw = cRes.data.content[0].text.replace(/```json|```/g, '').trim();
       const parsed = JSON.parse(raw);
@@ -122,22 +123,12 @@ app.post('/api/ocr', async (req, res) => {
     if (!fullText.trim()) return res.json({ rawText: '', parsed: null });
     const cRes = await axios.post('https://api.anthropic.com/v1/messages', {
       model: 'claude-haiku-4-5-20251001', max_tokens: 1500,
-      messages: [{ role: 'user', content: `Это распознанный текст рукописной товарной накладной. Извлеки данные в JSON.
+      system: 'Ты — точный парсер товарных накладных. Извлекай данные строго из таблицы товаров.\n\nПРАВИЛА:\n1. Каждая строка таблицы = один товар\n2. Колонки таблицы накладной: наименование, кол-во, ед.изм., цена, сумма\n3. Сумма строки = кол-во × цена (проверяй арифметику)\n4. Если сумма не совпадает с кол-во × цена — доверяй кол-во и цене, пересчитай сумму\n5. Итоговая сумма = сумма всех строк (не бери цифру "Итого" из текста — считай сам)\n6. Числа с пробелами — это тысячи: "1 830" = 1830, "22 857,50" = 22857.50\n7. Запятая в числах — десятичный разделитель: "2 687,5" = 2687.5\n8. Игнорируй строки без товара (пустые строки, заголовки, итоги, НДС)\n9. Единицы измерения: кг, шт, л, кор, уп, пач, лист и др.',
+      messages: [{ role: 'user', content: `Верни ТОЛЬКО JSON без пояснений:
+{"items":[{"name":"...","unit":"...","qty":число,"price":число,"total":число}],"total_sum":число}
 
-ТЕКСТ:
-${fullText}
-
-Верни ТОЛЬКО JSON без markdown:
-{
-  "number": "номер или null",
-  "date": "дата или null",
-  "supplier": "контрагент или null",
-  "buyer": "покупатель или null",
-  "items": [
-    { "name": "товар", "unit": "ед", "qty": число, "price": число или null, "total": число или null }
-  ],
-  "total_sum": число или null
-}` }]
+ТЕКСТ НАКЛАДНОЙ:
+${fullText}` }]
     }, { headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' } });
     let parsed = null;
     try {
@@ -198,11 +189,15 @@ app.post('/api/upload/commit', async (req, res) => {
   if (!session_id) return res.status(400).json({ ok: false, message: 'No session_id' });
   const received = await Invoice.countDocuments({ session_id });
   if (received !== session_total) {
-    await Invoice.updateMany(
-      { session_id },
-      { $set: { session_incomplete: true, session_total, session_received: received } }
-    );
-    return res.json({ ok: false, message: `Получено ${received} из ${session_total}` });
+    // Delete incomplete session photos and invoices
+    const incomplete = await Invoice.find({ session_id });
+    for (const inv of incomplete) {
+      for (const photo of (inv.photos || [])) {
+        try { fs.unlinkSync(path.join(__dirname, 'public/uploads', photo)); } catch (e) {}
+      }
+    }
+    await Invoice.deleteMany({ session_id });
+    return res.json({ ok: false, message: `Получено ${received} из ${session_total}. Сессия удалена.` });
   }
   await Invoice.updateMany(
     { session_id },
@@ -211,18 +206,27 @@ app.post('/api/upload/commit', async (req, res) => {
   res.json({ ok: true });
 });
 
-// Check for incomplete sessions every minute
+// Delete incomplete sessions after 15 minutes
 setInterval(async () => {
-  const cutoff = new Date(Date.now() - 15 * 60 * 1000);
-  await Invoice.updateMany(
-    {
+  try {
+    const cutoff = new Date(Date.now() - 15 * 60 * 1000);
+    const incomplete = await Invoice.find({
       session_id: { $ne: null },
       session_confirmed: { $ne: true },
-      session_incomplete: { $ne: true },
       received_at: { $lt: cutoff }
-    },
-    { $set: { session_incomplete: true } }
-  );
+    });
+    if (!incomplete.length) return;
+    // Delete photo files
+    for (const inv of incomplete) {
+      for (const photo of (inv.photos || [])) {
+        const filePath = path.join(__dirname, 'public/uploads', photo);
+        try { fs.unlinkSync(filePath); } catch (e) {}
+      }
+    }
+    const ids = incomplete.map(i => i._id);
+    const count = await Invoice.deleteMany({ _id: { $in: ids } });
+    console.log(`Cleaned ${count.deletedCount} incomplete invoices`);
+  } catch (e) { console.error('Cleanup error:', e.message); }
 }, 60 * 1000);
 
 app.get('/', (req, res) => res.sendFile(path.resolve(__dirname, 'public', 'admin.html')));

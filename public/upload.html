@@ -505,6 +505,11 @@
   <div class="success-icon">✓</div>
   <div class="success-title">Отправлено!</div>
   <div class="success-text" id="success-text">Накладные получены.<br>Спасибо!</div>
+  <div id="success-details" style="margin-top:12px;padding:14px 20px;background:var(--card);border:1px solid var(--border);border-radius:12px;font-size:12px;color:var(--muted);text-align:center;line-height:1.8;display:none;">
+    <div id="success-date" style="font-size:14px;color:var(--text);font-weight:500"></div>
+    <div id="success-count"></div>
+    <div id="success-supplier" style="color:var(--accent)"></div>
+  </div>
   <button class="btn-again" onclick="resetAll()">Отправить ещё</button>
 </div>
 
@@ -526,16 +531,8 @@ const STATUSES = [
   { key: 'paid_delivery', icon: '🚚', label: 'С доставкой' },
 ];
 
-const SEND_LABELS = {
-  pending:  { icon: '🕐', text: 'Ожидает статус', cls: '' },
-  sending:  { icon: '⏳', text: 'Отправляется...', cls: '' },
-  sent:     { icon: '✅', text: 'Отправлено', cls: 'set' },
-  error:    { icon: '❌', text: 'Ошибка', cls: 'error' },
-};
-
 let items = [];
 let sessionId = null;
-let idCounter = 0;
 
 function compressImage(file, maxWidth, quality) {
   return new Promise((resolve) => {
@@ -570,97 +567,24 @@ async function handleFiles(e) {
   e.target.value = '';
   for (const file of files) {
     const compressed = await compressImage(file, 1200, 0.6);
-    items.unshift({
-      id: ++idCounter,
-      file: compressed,
-      url: URL.createObjectURL(compressed),
-      paymentStatus: null,
-      paymentAmount: '',
-      sendStatus: 'pending',
-      invoiceId: null,
-      amountTimer: null
-    });
+    items.unshift({ file: compressed, url: URL.createObjectURL(compressed), paymentStatus: null, paymentAmount: '' });
     renderCards();
   }
 }
 
 function removeItem(i) {
-  const item = items[i];
-  if (item.sendStatus === 'sending' || item.sendStatus === 'sent') {
-    showToast('Нельзя удалить отправленное фото');
-    return;
-  }
-  URL.revokeObjectURL(item.url);
+  URL.revokeObjectURL(items[i].url);
   items.splice(i, 1);
   renderCards();
 }
 
 function selectStatus(idx, status) {
-  const item = items[idx];
-  if (item.sendStatus === 'sending' || item.sendStatus === 'sent') return;
-  item.paymentStatus = item.paymentStatus === status ? null : status;
-  if (!sessionId && item.paymentStatus) {
-    sessionId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-  }
+  items[idx].paymentStatus = items[idx].paymentStatus === status ? null : status;
   renderCards();
-  if (item.paymentStatus && item.sendStatus === 'pending') {
-    sendPhotoInBackground(item);
-  }
 }
 
 function setAmount(idx, val) {
-  const item = items[idx];
-  item.paymentAmount = val;
-  clearTimeout(item.amountTimer);
-  item.amountTimer = setTimeout(async () => {
-    if (!item.invoiceId || !item.paymentAmount) return;
-    try {
-      await fetch('/api/invoices/' + item.invoiceId, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payment_amount: parseFloat(item.paymentAmount) })
-      });
-    } catch (e) { console.error('Amount update error:', e); }
-  }, 1000);
-}
-
-async function sendWithRetry(formData, attempts) {
-  for (let i = 0; i < attempts; i++) {
-    try {
-      const res = await fetch(SERVER_URL, { method: 'POST', body: formData });
-      if (res.ok) return await res.json();
-      throw new Error('Server error ' + res.status);
-    } catch (e) {
-      if (i === attempts - 1) throw e;
-      await new Promise(r => setTimeout(r, 2000));
-    }
-  }
-}
-
-async function sendPhotoInBackground(item) {
-  if (!sessionId) {
-    sessionId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-  }
-  item.sendStatus = 'sending';
-  renderCards();
-
-  const formData = new FormData();
-  formData.append('files', item.file, item.file.name);
-  formData.append('payment_status', item.paymentStatus);
-  if (item.paymentAmount) formData.append('payment_amount', item.paymentAmount);
-  formData.append('session_id', sessionId);
-  formData.append('session_index', item.id);
-  formData.append('session_total', 0);
-
-  try {
-    const res = await sendWithRetry(formData, 3);
-    item.sendStatus = 'sent';
-    item.invoiceId = res.invoice_id;
-  } catch (e) {
-    item.sendStatus = 'error';
-    console.error('Send error:', e);
-  }
-  renderCards();
+  items[idx].paymentAmount = val;
 }
 
 function renderCards() {
@@ -674,37 +598,25 @@ function renderCards() {
   }
 
   section.classList.add('show');
-  const sentCount = items.filter(i => i.sendStatus === 'sent').length;
-  const sendingCount = items.filter(i => i.sendStatus === 'sending').length;
-  let countText = items.length + ' фото';
-  if (sentCount > 0 || sendingCount > 0) {
-    countText += ` · ✅ ${sentCount}`;
-    if (sendingCount > 0) countText += ` · ⏳ ${sendingCount}`;
-  }
-  count.textContent = countText;
+  count.textContent = items.length + ' фото';
 
   list.innerHTML = items.map((item, i) => {
     const statusLabel = STATUSES.find(s => s.key === item.paymentStatus);
-    const sendLabel = SEND_LABELS[item.sendStatus];
-    const isSentOrSending = item.sendStatus === 'sending' || item.sendStatus === 'sent';
     return `
-    <div class="photo-card ${item.sendStatus === 'error' ? 'error' : ''}" style="margin-bottom:10px">
+    <div class="photo-card" style="margin-bottom:10px">
       <div class="photo-card-top">
         <img class="photo-card-img" src="${item.url}" />
         <div class="photo-card-info">
           <div class="photo-card-name">${item.file.name}</div>
-          <div class="photo-card-status ${statusLabel ? 'set' : ''}">
+          <div class="photo-card-status ${item.paymentStatus ? 'set' : ''}">
             ${statusLabel ? statusLabel.icon + ' ' + statusLabel.label : 'Статус не выбран'}
           </div>
-          <div class="photo-card-status" style="margin-top:2px;font-size:10px;color:${item.sendStatus === 'sent' ? 'var(--success)' : item.sendStatus === 'error' ? 'var(--error)' : 'var(--muted)'}">
-            ${sendLabel.icon} ${sendLabel.text}
-          </div>
         </div>
-        ${!isSentOrSending ? `<button class="photo-card-remove" onclick="removeItem(${i})">×</button>` : ''}
+        <button class="photo-card-remove" onclick="removeItem(${i})">×</button>
       </div>
       <div class="status-row">
         ${STATUSES.map(s => `
-          <button class="status-btn ${item.paymentStatus === s.key ? 'selected' : ''}" ${isSentOrSending ? 'disabled style="opacity:.5"' : ''} onclick="selectStatus(${i}, '${s.key}')">
+          <button class="status-btn ${item.paymentStatus === s.key ? 'selected' : ''}" onclick="selectStatus(${i}, '${s.key}')">
             <span class="status-btn-icon">${s.icon}</span> ${s.label}
           </button>
         `).join('')}
@@ -721,6 +633,11 @@ function renderCards() {
 async function sendFiles() {
   if (!items.length) return;
 
+  // Read amounts from DOM
+  document.querySelectorAll('.amount-input').forEach((input, i) => {
+    if (input.value) items[i].paymentAmount = input.value;
+  });
+
   // Validate all have payment status
   const missing = items.reduce((arr, item, i) => { if (!item.paymentStatus) arr.push(i); return arr; }, []);
   if (missing.length) {
@@ -731,60 +648,60 @@ async function sendFiles() {
     return;
   }
 
-  if (!sessionId) {
-    sessionId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-  }
-
-  // Retry errors and send pending
-  const toSend = items.filter(i => i.sendStatus === 'error' || i.sendStatus === 'pending');
-  for (const item of toSend) {
-    await sendPhotoInBackground(item);
-  }
-
-  // Wait for any in-flight sends
-  while (items.some(i => i.sendStatus === 'sending')) {
-    await new Promise(r => setTimeout(r, 500));
-  }
-
+  sessionId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   const totalPhotos = items.length;
-  const allSent = items.every(i => i.sendStatus === 'sent');
 
-  if (!allSent) {
-    showToast('Не все фото отправлены. Попробуйте ещё раз.');
-    return;
-  }
+  document.getElementById('main-screen').style.display = 'none';
+  document.getElementById('progress-screen').classList.add('show');
 
-  // Update session_total on all sent invoices
-  for (const item of items) {
-    if (item.invoiceId) {
-      try {
-        await fetch('/api/invoices/' + item.invoiceId, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_total: totalPhotos })
-        });
-      } catch (e) { console.error('session_total update error:', e); }
-    }
-  }
-
-  // Commit session
+  let sent = 0;
   try {
-    const res = await fetch('/api/upload/commit', {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      document.getElementById('progress-file').textContent = `Фото ${i + 1} из ${items.length}`;
+
+      const formData = new FormData();
+      formData.append('files', item.file, item.file.name);
+      formData.append('payment_status', item.paymentStatus);
+      if (item.paymentAmount) formData.append('payment_amount', item.paymentAmount);
+      formData.append('session_id', sessionId);
+      formData.append('session_index', i);
+      formData.append('session_total', totalPhotos);
+
+      const res = await fetch(SERVER_URL, { method: 'POST', body: formData });
+      if (!res.ok) throw new Error('Ошибка сервера на фото ' + (i + 1));
+      sent++;
+    }
+
+    document.getElementById('progress-file').textContent = 'Проверка...';
+    const commitRes = await fetch('/api/upload/commit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId, session_total: totalPhotos, token })
     });
-    const data = await res.json();
+    const commitData = await commitRes.json();
 
-    document.getElementById('main-screen').style.display = 'none';
+    document.getElementById('progress-screen').classList.remove('show');
     document.getElementById('success-screen').classList.add('show');
-    if (!data.ok) {
-      document.getElementById('success-text').textContent = '⚠️ Не все фото дошли. Попробуйте отправить ещё раз.';
+    if (commitData.ok) {
+      document.getElementById('success-text').textContent = '✅ Все фото отправлены!';
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('ru', { day:'2-digit', month:'2-digit', year:'numeric' });
+      const timeStr = now.toLocaleTimeString('ru', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+      document.getElementById('success-date').textContent = dateStr + ' · ' + timeStr;
+      document.getElementById('success-count').textContent = 'Фото: ' + totalPhotos + ' шт.';
+      document.getElementById('success-supplier').textContent = document.getElementById('supplier-name').textContent;
+      document.getElementById('success-details').style.display = 'block';
     } else {
-      document.getElementById('success-text').textContent = '✅ Все фото отправлены!\nСпасибо!';
+      document.getElementById('success-text').textContent = '⚠️ Не все фото дошли. Попробуйте ещё раз.';
+      document.getElementById('success-details').style.display = 'none';
     }
+
   } catch (err) {
-    showToast('Ошибка проверки сессии: ' + err.message);
+    document.getElementById('progress-screen').classList.remove('show');
+    document.getElementById('success-screen').classList.add('show');
+    document.getElementById('success-text').textContent =
+      sent > 0 ? `Отправлено ${sent} из ${items.length}.\n${err.message}` : err.message;
   }
 }
 
@@ -792,7 +709,6 @@ function resetAll() {
   items.forEach(it => URL.revokeObjectURL(it.url));
   items = [];
   sessionId = null;
-  idCounter = 0;
   document.getElementById('success-screen').classList.remove('show');
   document.getElementById('main-screen').style.display = '';
   renderCards();

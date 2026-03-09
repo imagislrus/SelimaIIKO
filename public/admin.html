@@ -299,6 +299,14 @@ function switchTab(tab) {
 }
 
 // ── INVOICES ──
+function getDisplayTotal(inv) {
+  const ocr = inv.total_sum || 0;
+  if (inv.payment_status === 'paid_delivery' && inv.payment_amount) {
+    return { base: ocr, delivery: inv.payment_amount, total: ocr + inv.payment_amount };
+  }
+  return { base: ocr, delivery: null, total: ocr };
+}
+
 let allInvoices = [];
 let currentFilter = 'new';
 let selectedInvId = null;
@@ -361,7 +369,7 @@ function renderInvList() {
     return `
     <div class="inv-card ${inv._id === selectedInvId ? 'active' : ''}" onclick="selectInvoice('${inv._id}')">
       <div class="inv-card-name">${inv.supplier_name || 'Без имени'}</div>
-      <div class="inv-card-meta">${date}${inv.total_sum ? ' · ' + inv.total_sum.toLocaleString('ru') + ' ₽' : ''}</div>
+      <div class="inv-card-meta">${date}${getDisplayTotal(inv).total ? ' · ' + getDisplayTotal(inv).total.toLocaleString('ru') + ' ₽' : ''}</div>
       <div class="inv-card-badges">
         <span class="b b-${inv.status}">${STATUS_LABELS[inv.status] || inv.status}</span>
         ${ps ? `<span class="b b-${ps}">${PS_LABELS[ps] || ps}</span>` : ''}
@@ -408,14 +416,23 @@ function renderDetail() {
           <div class="inv-info">
             <div class="inv-info-row">Контрагент: <span>${inv.supplier_name || '—'}</span></div>
             <div class="inv-info-row">Дата: <span>${date}</span></div>
-            <div class="inv-info-row">Оплата: <span>${ps ? PS_LABELS[ps] || ps : '—'}</span>${inv.payment_amount ? ' · ' + inv.payment_amount + ' ₽' : ''}</div>
             <div class="inv-info-row">Статус: <span class="b b-${inv.status}" style="font-size:10px">${STATUS_LABELS[inv.status] || inv.status}</span>${inv.items_edited ? ' <span class="b b-edited" style="font-size:10px">изменено</span>' : ''}</div>
           </div>
           ${renderItemsTable(items, inv._id)}
-          <div class="inv-total">
-            <span class="inv-total-label">ИТОГО</span>
-            <span class="inv-total-value" id="detail-total">${(inv.total_sum || 0).toLocaleString('ru')} ₽</span>
-          </div>
+          <table style="width:100%;border-collapse:collapse;margin-top:12px;">
+            <tr>
+              <td style="padding:6px 10px;text-align:right;color:var(--muted);font-size:13px">ИТОГО</td>
+              <td style="padding:6px 10px;text-align:right;color:#FFD700;font-weight:600;font-size:16px;width:140px" id="detail-total">${(inv.total_sum || 0).toLocaleString('ru')} ₽</td>
+            </tr>
+            ${ps && PS_LABELS[ps] ? `<tr>
+              <td style="padding:6px 10px;text-align:right;font-size:14px;color:${ps === 'paid' ? 'var(--success)' : ps === 'not_paid' ? 'var(--error)' : ps === 'paid_cash' ? 'var(--warn)' : 'var(--accent2)'}">${PS_LABELS[ps]}</td>
+              <td style="padding:6px 10px;text-align:right;font-size:14px;color:${ps === 'paid' ? 'var(--success)' : ps === 'not_paid' ? 'var(--error)' : ps === 'paid_cash' ? 'var(--warn)' : 'var(--accent2)'};width:140px">${inv.payment_amount ? '+' + inv.payment_amount.toLocaleString('ru') + ' ₽' : ''}</td>
+            </tr>` : ''}
+            ${inv.payment_amount ? `<tr>
+              <td style="padding:8px 10px;text-align:right;border-top:1px solid #444;font-weight:700;font-size:14px;color:var(--text)">ВСЕГО</td>
+              <td style="padding:8px 10px;text-align:right;border-top:1px solid #444;font-weight:700;font-size:16px;color:#FFD700;width:140px">${((inv.total_sum || 0) + inv.payment_amount).toLocaleString('ru')} ₽</td>
+            </tr>` : ''}
+          </table>
           ${renderActions(inv)}
           ${inv.ocr_raw ? `<div class="raw-label">ИСХОДНЫЙ ТЕКСТ (OCR)</div><div class="raw-text">${escHtml(inv.ocr_raw)}</div>` : ''}
         </div>
